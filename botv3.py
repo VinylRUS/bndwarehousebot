@@ -177,39 +177,83 @@ def get_role(user_id: int) -> str:
         return "collector"
     return "unknown"
 
-# helper to create empty reply keyboard (pydantic requires keyboard field)
-def empty_reply_kb() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
-
 # ---------- Reply keyboards (кнопки под полем ввода) ----------
 def kb_admin() -> ReplyKeyboardMarkup:
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("➕ Новая коробка"))
-    kb.add(KeyboardButton("📋 Мои коробки"), KeyboardButton("📦 Ожидающие"))
-    kb.add(KeyboardButton("➕ Добавить сборщицу"), KeyboardButton("➕ Добавить работника"))
-    kb.add(KeyboardButton("📤 Экспорт CSV"), KeyboardButton("📈 Статистика"))
-    kb.add(KeyboardButton("🔙 В главное"))
-    return kb
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("➕ Новая коробка")],
+            [KeyboardButton("📋 Мои коробки"), KeyboardButton("📦 Ожидающие")],
+            [KeyboardButton("➕ Добавить сборщицу"), KeyboardButton("➕ Добавить работника")],
+            [KeyboardButton("📤 Экспорт CSV"), KeyboardButton("📈 Статистика")],
+            [KeyboardButton("🔙 В главное")]
+        ],
+        resize_keyboard=True
+    )
 
 def kb_worker() -> ReplyKeyboardMarkup:
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("📦 Ожидающие"))
-    kb.add(KeyboardButton("📈 Статистика"))
-    kb.add(KeyboardButton("🔙 В главное"))
-    return kb
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("📦 Ожидающие")],
+            [KeyboardButton("📈 Статистика")],
+            [KeyboardButton("🔙 В главное")]
+        ],
+        resize_keyboard=True
+    )
 
 def kb_collector() -> ReplyKeyboardMarkup:
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("➕ Новая коробка"))
-    kb.add(KeyboardButton("📋 Мои коробки"))
-    kb.add(KeyboardButton("🔙 В главное"))
-    return kb
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("➕ Новая коробка")],
+            [KeyboardButton("📋 Мои коробки")],
+            [KeyboardButton("🔙 В главное")]
+        ],
+        resize_keyboard=True
+    )
 
 def kb_default() -> ReplyKeyboardMarkup:
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("➕ Новая коробка"))
-    kb.add(KeyboardButton("🔙 В главное"))
-    return kb
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("➕ Новая коробка")],
+            [KeyboardButton("🔙 В главное")]
+        ],
+        resize_keyboard=True
+    )
+
+# Helper builders used inside handlers for temporary keyboards
+def kb_photos_ready() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("Готово")],
+            [KeyboardButton("Отмена")]
+        ],
+        resize_keyboard=True
+    )
+
+def kb_date_choice() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("Сегодня"), KeyboardButton("Ввести дату")],
+            [KeyboardButton("Отмена")]
+        ],
+        resize_keyboard=True
+    )
+
+def kb_destination_choice() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("WB"), KeyboardButton("OZON"), KeyboardButton("FBS")],
+            [KeyboardButton("Отмена")]
+        ],
+        resize_keyboard=True
+    )
+
+def kb_confirm() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("Подтвердить"), KeyboardButton("Отмена")]
+        ],
+        resize_keyboard=True
+    )
 
 # ---------- FSM states ----------
 class NewBox(StatesGroup):
@@ -259,10 +303,7 @@ async def cmd_start(m: types.Message):
 @dp.message(F.text == "➕ Новая коробка")
 async def btn_newbox_pressed(m: types.Message, state: FSMContext):
     await state.update_data(photo_ids=[])
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("Готово"))
-    kb.add(KeyboardButton("Отмена"))
-    await m.answer("Отправьте 1 или несколько фото коробки. Когда закончите — нажмите кнопку 'Готово'.", reply_markup=kb)
+    await m.answer("Отправьте 1 или несколько фото коробки. Когда закончите — нажмите кнопку 'Готово'.", reply_markup=kb_photos_ready())
     await state.set_state(NewBox.waiting_photos)
 
 @dp.message(NewBox.waiting_photos, F.photo)
@@ -299,27 +340,19 @@ async def invalid_input_waiting_photos(m: types.Message):
 async def collector_name_entered(m: types.Message, state: FSMContext):
     name = m.text.strip()
     await state.update_data(collector_name=name)
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("Сегодня"), KeyboardButton("Ввести дату"))
-    kb.add(KeyboardButton("Отмена"))
-    await m.answer("Выберите дату коробки:", reply_markup=kb)
+    await m.answer("Выберите дату коробки:", reply_markup=kb_date_choice())
     await state.set_state(NewBox.waiting_date_choice)
 
 @dp.message(NewBox.waiting_date_choice, F.text == "Сегодня")
 async def date_today_cb(m: types.Message, state: FSMContext):
     today = date.today().isoformat()
     await state.update_data(box_date=today)
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("WB"), KeyboardButton("OZON"), KeyboardButton("FBS"))
-    kb.add(KeyboardButton("Отмена"))
-    await m.answer(f"Дата установлена: {today}\nВыберите назначение коробки:", reply_markup=kb)
+    await m.answer(f"Дата установлена: {today}\nВыберите назначение коробки:", reply_markup=kb_destination_choice())
     await state.set_state(NewBox.waiting_destination)
 
 @dp.message(NewBox.waiting_date_choice, F.text == "Ввести дату")
 async def date_manual_prompt(m: types.Message, state: FSMContext):
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("Отмена"))
-    await m.answer("Введите дату в формате YYYY-MM-DD (например 2025-12-06):", reply_markup=kb)
+    await m.answer("Введите дату в формате YYYY-MM-DD (например 2025-12-06):", reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton("Отмена")]], resize_keyboard=True))
     await state.set_state(NewBox.waiting_manual_date)
 
 @dp.message(NewBox.waiting_manual_date)
@@ -334,10 +367,7 @@ async def date_manual_entered(m: types.Message, state: FSMContext):
     try:
         d = datetime.fromisoformat(text).date()
         await state.update_data(box_date=d.isoformat())
-        kb = empty_reply_kb()
-        kb.add(KeyboardButton("WB"), KeyboardButton("OZON"), KeyboardButton("FBS"))
-        kb.add(KeyboardButton("Отмена"))
-        await m.answer(f"Дата установлена: {d.isoformat()}\nВыберите назначение коробки:", reply_markup=kb)
+        await m.answer(f"Дата установлена: {d.isoformat()}\nВыберите назначение коробки:", reply_markup=kb_destination_choice())
         await state.set_state(NewBox.waiting_destination)
     except Exception:
         await m.answer("Неправильный формат даты. Попробуйте YYYY-MM-DD или нажмите 'Отмена'.")
@@ -360,9 +390,7 @@ async def destination_chosen(m: types.Message, state: FSMContext):
     box_date = data.get("box_date", date.today().isoformat())
     dest = data.get("destination")
     txt = f"Подтверждение:\nСборщица: {collector_name}\nДата: {box_date}\nНазначение: {dest}\nФото: {len(photos)}\n\nНажмите 'Подтвердить' или 'Отмена'."
-    kb = empty_reply_kb()
-    kb.add(KeyboardButton("Подтвердить"), KeyboardButton("Отмена"))
-    await m.answer(txt, reply_markup=kb)
+    await m.answer(txt, reply_markup=kb_confirm())
     await state.set_state(NewBox.confirming)
 
 @dp.message(NewBox.confirming, F.text == "Отмена")
